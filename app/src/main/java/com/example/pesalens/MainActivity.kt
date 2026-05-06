@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -220,11 +221,14 @@ fun MainScreen(
             val navBackStackEntry by navController.currentBackStackEntryAsState()
             val currentRoute = navBackStackEntry?.destination?.route
             
+            // Filter out Settings from bottom bar
+            val bottomNavItems = navItems.filter { it.route != Screen.Settings.route }
+
             NavigationBar(
                 containerColor = MaterialTheme.colorScheme.surface,
                 tonalElevation = 8.dp
             ) {
-                navItems.forEach { screen ->
+                bottomNavItems.forEach { screen ->
                     NavigationBarItem(
                         icon = { Icon(screen.icon, contentDescription = screen.title) },
                         label = { Text(screen.title, style = MaterialTheme.typography.labelSmall) },
@@ -260,7 +264,7 @@ fun MainScreen(
                 modifier = Modifier.fillMaxSize()
             ) {
                 Column(modifier = Modifier.padding(innerPadding)) {
-                    // Top TinXel Header
+                    // Top TinXel Header with Privacy Toggle and Settings
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -268,12 +272,21 @@ fun MainScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TinXelLogo(modifier = Modifier.align(Alignment.CenterVertically))
                         IconButton(onClick = { privacyMode.value = !privacyMode.value }) {
                             Icon(
                                 if (privacyMode.value) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                                 contentDescription = "Toggle Privacy"
                             )
+                        }
+                        TinXelLogo(modifier = Modifier.align(Alignment.CenterVertically))
+                        IconButton(onClick = {
+                            navController.navigate(Screen.Settings.route) {
+                                popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        }) {
+                            Icon(Icons.Rounded.Settings, contentDescription = "Settings")
                         }
                     }
 
@@ -305,14 +318,17 @@ fun MainScreen(
                                 modifier = Modifier.weight(1f),
                                 isSensitive = true
                             )
-                            InsightCard(
-                                title = "Fuliza Allowance",
-                                value = formatMoney(insights.fulizaAllowance, selectedCurrency, decimals = 0),
-                                subtitle = "Spending Limit",
-                                color = MaterialTheme.colorScheme.secondaryContainer,
-                                modifier = Modifier.weight(1f),
-                                isSensitive = true
-                            )
+                            // Only show Fuliza for Safaricom
+                            if (selectedProvider == null || selectedProvider == NetworkProvider.SAFARICOM) {
+                                InsightCard(
+                                    title = "Fuliza Allowance",
+                                    value = formatMoney(insights.fulizaAllowance, selectedCurrency, decimals = 0),
+                                    subtitle = "Spending Limit",
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                    modifier = Modifier.weight(1f),
+                                    isSensitive = true
+                                )
+                            }
                         }
                     }
 
@@ -352,6 +368,9 @@ private fun TransactionFilterBar(
     selectedYear: Int,
     onYearSelected: (Int) -> Unit
 ) {
+    var expandedProvider by remember { mutableStateOf(false) }
+    var expandedYear by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -359,38 +378,68 @@ private fun TransactionFilterBar(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            FilterChip(
-                selected = selectedProviderName == null,
-                onClick = { onProviderSelected(null) },
-                label = { Text("All") }
-            )
-            NetworkProvider.values().forEach { provider ->
-                FilterChip(
-                    selected = selectedProviderName == provider.name,
-                    onClick = { onProviderSelected(provider.name) },
-                    label = { Text(provider.shortName) }
-                )
-            }
-        }
-
-        if (availableYears.isNotEmpty()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                availableYears.forEach { year ->
-                    FilterChip(
-                        selected = selectedYear == year,
-                        onClick = { onYearSelected(year) },
-                        label = { Text(year.toString()) }
+            // Provider Dropdown
+            Box(modifier = Modifier.weight(1f)) {
+                OutlinedButton(
+                    onClick = { expandedProvider = !expandedProvider },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(selectedProviderName ?: "All Providers")
+                }
+                DropdownMenu(
+                    expanded = expandedProvider,
+                    onDismissRequest = { expandedProvider = false },
+                    modifier = Modifier.fillMaxWidth(0.5f)
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("All") },
+                        onClick = {
+                            onProviderSelected(null)
+                            expandedProvider = false
+                        },
+                        leadingIcon = if (selectedProviderName == null) { { Icon(Icons.Default.Visibility, null) } } else null
                     )
+                    NetworkProvider.values().forEach { provider ->
+                        DropdownMenuItem(
+                            text = { Text(provider.shortName) },
+                            onClick = {
+                                onProviderSelected(provider.name)
+                                expandedProvider = false
+                            },
+                            leadingIcon = if (selectedProviderName == provider.name) { { Icon(Icons.Default.Visibility, null) } } else null
+                        )
+                    }
+                }
+            }
+
+            // Year Dropdown
+            if (availableYears.isNotEmpty()) {
+                Box(modifier = Modifier.weight(1f)) {
+                    OutlinedButton(
+                        onClick = { expandedYear = !expandedYear },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(selectedYear.toString())
+                    }
+                    DropdownMenu(
+                        expanded = expandedYear,
+                        onDismissRequest = { expandedYear = false },
+                        modifier = Modifier.fillMaxWidth(0.5f)
+                    ) {
+                        availableYears.forEach { year ->
+                            DropdownMenuItem(
+                                text = { Text(year.toString()) },
+                                onClick = {
+                                    onYearSelected(year)
+                                    expandedYear = false
+                                },
+                                leadingIcon = if (selectedYear == year) { { Icon(Icons.Default.Visibility, null) } } else null
+                            )
+                        }
+                    }
                 }
             }
         }

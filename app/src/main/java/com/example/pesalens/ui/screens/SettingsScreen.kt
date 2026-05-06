@@ -31,6 +31,7 @@ fun SettingsScreen(
 ) {
     val context       = LocalContext.current
     val secureStorage = remember { SecureStorage(context) }
+    val settingsRepository = remember { SettingsRepository(context) }
 
     var showThemeDialog    by remember { mutableStateOf(false) }
     var showCurrencyDialog by remember { mutableStateOf(false) }
@@ -38,6 +39,10 @@ fun SettingsScreen(
     var apiKeyMasked       by remember { mutableStateOf(
         if (secureStorage.hasApiKey()) "sk-ant-......${secureStorage.anthropicApiKey.takeLast(4)}" else "Not configured"
     )}
+
+    val showIncome by settingsRepository.showIncome.collectAsState(initial = true)
+    val showExpenses by settingsRepository.showExpenses.collectAsState(initial = true)
+    val scope = rememberCoroutineScope()
 
     val selectedCurrency = CURRENCIES.firstOrNull { it.code == currentCurrency } ?: CURRENCIES.first()
 
@@ -75,6 +80,64 @@ fun SettingsScreen(
                         title    = "Currency",
                         subtitle = "${selectedCurrency.flag} ${selectedCurrency.name} (${selectedCurrency.symbol})",
                         onClick  = { showCurrencyDialog = true }
+                    )
+                }
+            }
+
+            // ── Transaction Display ─────────────────────────────────────────
+            item {
+                Spacer(Modifier.height(4.dp))
+                SettingsSectionHeader("Transaction Display")
+            }
+            item {
+                SettingsCard {
+                    ListItem(
+                        headlineContent = { Text("Show Income", fontWeight = FontWeight.Medium) },
+                        supportingContent = { Text("Display money received", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline) },
+                        leadingContent = {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Rounded.TrendingUp, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        },
+                        trailingContent = {
+                            Switch(
+                                checked = showIncome,
+                                onCheckedChange = { scope.launch { settingsRepository.setShowIncome(it) } }
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    ListItem(
+                        headlineContent = { Text("Show Expenses", fontWeight = FontWeight.Medium) },
+                        supportingContent = { Text("Display money spent", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline) },
+                        leadingContent = {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Rounded.TrendingDown, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        },
+                        trailingContent = {
+                            Switch(
+                                checked = showExpenses,
+                                onCheckedChange = { scope.launch { settingsRepository.setShowExpenses(it) } }
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
