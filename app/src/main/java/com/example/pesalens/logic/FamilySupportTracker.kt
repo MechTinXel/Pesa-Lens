@@ -1,5 +1,7 @@
 package com.example.pesalens.logic
 
+import com.example.pesalens.PesaTransaction
+
 data class FamilySupportPayment(
     val date: Long,
     val recipient: String, // "Mother", "Father", "Sister", "Brother", "Child", "Dependant"

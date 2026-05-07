@@ -11,6 +11,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -226,11 +228,18 @@ fun MainScreen(
 
             NavigationBar(
                 containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 8.dp
+                tonalElevation = 0.dp,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
                 bottomNavItems.forEach { screen ->
                     NavigationBarItem(
-                        icon = { Icon(screen.icon, contentDescription = screen.title) },
+                        icon = {
+                            Icon(
+                                screen.icon,
+                                contentDescription = screen.title,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        },
                         label = { Text(screen.title, style = MaterialTheme.typography.labelSmall) },
                         selected = currentRoute == screen.route,
                         onClick = {
@@ -239,7 +248,8 @@ fun MainScreen(
                                 launchSingleTop = true
                                 restoreState = true
                             }
-                        }
+                        },
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
@@ -247,7 +257,10 @@ fun MainScreen(
     ) { innerPadding ->
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(strokeCap = StrokeCap.Round)
+                CircularProgressIndicator(
+                    strokeCap = StrokeCap.Round,
+                    modifier = Modifier.size(48.dp)
+                )
             }
         } else {
             val privacyMode = LocalPrivacyMode.current
@@ -263,33 +276,50 @@ fun MainScreen(
                 },
                 modifier = Modifier.fillMaxSize()
             ) {
-                Column(modifier = Modifier.padding(innerPadding)) {
-                    // Top TinXel Header with Privacy Toggle and Settings
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
+                    // Minimalist Top Header
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = { privacyMode.value = !privacyMode.value }) {
-                            Icon(
-                                if (privacyMode.value) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = "Toggle Privacy"
-                            )
-                        }
-                        TinXelLogo(modifier = Modifier.align(Alignment.CenterVertically))
-                        IconButton(onClick = {
-                            navController.navigate(Screen.Settings.route) {
-                                popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
+                        TinXelLogo(modifier = Modifier.size(32.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(
+                                onClick = { privacyMode.value = !privacyMode.value },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    if (privacyMode.value) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = "Toggle Privacy",
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
-                        }) {
-                            Icon(Icons.Rounded.Settings, contentDescription = "Settings")
+                            IconButton(
+                                onClick = {
+                                    navController.navigate(Screen.Settings.route) {
+                                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(Icons.Rounded.Settings, contentDescription = "Settings", modifier = Modifier.size(20.dp))
+                            }
                         }
                     }
 
+                    // Compact Filter Bar
                     TransactionFilterBar(
                         selectedProviderName = selectedProviderName,
                         onProviderSelected = { selectedProviderName = it },
@@ -298,44 +328,50 @@ fun MainScreen(
                         onYearSelected = { selectedYear = it }
                     )
 
-                    // Top Insights Bar
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Elegant Insights Cards
                     AnimatedVisibility(
                         visible = visibleTransactions.isNotEmpty(),
-                        enter = expandVertically() + fadeIn(),
-                        exit = shrinkVertically() + fadeOut()
+                        enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
+                        exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
+                        modifier = Modifier.padding(horizontal = 12.dp)
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             InsightCard(
                                 title = "${selectedProvider?.shortName ?: "Mobile Money"} Balance",
                                 value = formatMoney(insights.mpesaBalance, selectedCurrency, decimals = 0),
                                 subtitle = "Available Now",
                                 color = MaterialTheme.colorScheme.primaryContainer,
-                                modifier = Modifier.weight(1f),
                                 isSensitive = true
                             )
                             // Only show Fuliza for Safaricom
-                            if (selectedProvider == null || selectedProvider == NetworkProvider.SAFARICOM) {
+                            if (selectedProvider == null || selectedProvider == NetworkProvider.MPESA) {
                                 InsightCard(
                                     title = "Fuliza Allowance",
                                     value = formatMoney(insights.fulizaAllowance, selectedCurrency, decimals = 0),
                                     subtitle = "Spending Limit",
                                     color = MaterialTheme.colorScheme.secondaryContainer,
-                                    modifier = Modifier.weight(1f),
                                     isSensitive = true
                                 )
                             }
                         }
                     }
 
+                    Spacer(modifier = Modifier.height(4.dp))
+
                     NavHost(
                         navController = navController,
                         startDestination = Screen.History.route,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        enterTransition = {
+                            fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.95f, animationSpec = tween(300))
+                        },
+                        exitTransition = {
+                            fadeOut(animationSpec = tween(300)) + scaleOut(targetScale = 0.95f, animationSpec = tween(300))
+                        }
                     ) {
                         composable(Screen.History.route) { HistoryScreen(visibleTransactions, selectedCurrency) }
                         composable(Screen.Outgoing.route) { AnalyticsScreen("Expenses", visibleTransactions, true, selectedCurrency) }
@@ -371,74 +407,80 @@ private fun TransactionFilterBar(
     var expandedProvider by remember { mutableStateOf(false) }
     var expandedYear by remember { mutableStateOf(false) }
 
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Provider Dropdown
-            Box(modifier = Modifier.weight(1f)) {
-                OutlinedButton(
-                    onClick = { expandedProvider = !expandedProvider },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(selectedProviderName ?: "All Providers")
-                }
-                DropdownMenu(
-                    expanded = expandedProvider,
-                    onDismissRequest = { expandedProvider = false },
-                    modifier = Modifier.fillMaxWidth(0.5f)
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("All") },
-                        onClick = {
-                            onProviderSelected(null)
-                            expandedProvider = false
-                        },
-                        leadingIcon = if (selectedProviderName == null) { { Icon(Icons.Default.Visibility, null) } } else null
-                    )
-                    NetworkProvider.values().forEach { provider ->
-                        DropdownMenuItem(
-                            text = { Text(provider.shortName) },
-                            onClick = {
-                                onProviderSelected(provider.name)
-                                expandedProvider = false
-                            },
-                            leadingIcon = if (selectedProviderName == provider.name) { { Icon(Icons.Default.Visibility, null) } } else null
-                        )
+        // Provider Dropdown
+        Box(modifier = Modifier.weight(1f)) {
+            OutlinedButton(
+                onClick = { expandedProvider = !expandedProvider },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(40.dp),
+                shape = MaterialTheme.shapes.small
+            ) {
+                Text(
+                    selectedProviderName?.let { NetworkProvider.valueOf(it).shortName } ?: "All",
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1
+                )
+            }
+            DropdownMenu(
+                expanded = expandedProvider,
+                onDismissRequest = { expandedProvider = false },
+                modifier = Modifier.fillMaxWidth(0.5f)
+            ) {
+                DropdownMenuItem(
+                    text = { Text("All", style = MaterialTheme.typography.bodyMedium) },
+                    onClick = {
+                        onProviderSelected(null)
+                        expandedProvider = false
                     }
+                )
+                NetworkProvider.values().forEach { provider ->
+                    DropdownMenuItem(
+                        text = { Text(provider.shortName, style = MaterialTheme.typography.bodyMedium) },
+                        onClick = {
+                            onProviderSelected(provider.name)
+                            expandedProvider = false
+                        }
+                    )
                 }
             }
+        }
 
-            // Year Dropdown
-            if (availableYears.isNotEmpty()) {
-                Box(modifier = Modifier.weight(1f)) {
-                    OutlinedButton(
-                        onClick = { expandedYear = !expandedYear },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(selectedYear.toString())
-                    }
-                    DropdownMenu(
-                        expanded = expandedYear,
-                        onDismissRequest = { expandedYear = false },
-                        modifier = Modifier.fillMaxWidth(0.5f)
-                    ) {
-                        availableYears.forEach { year ->
-                            DropdownMenuItem(
-                                text = { Text(year.toString()) },
-                                onClick = {
-                                    onYearSelected(year)
-                                    expandedYear = false
-                                },
-                                leadingIcon = if (selectedYear == year) { { Icon(Icons.Default.Visibility, null) } } else null
-                            )
-                        }
+        // Year Dropdown
+        if (availableYears.isNotEmpty()) {
+            Box(modifier = Modifier.weight(0.8f)) {
+                OutlinedButton(
+                    onClick = { expandedYear = !expandedYear },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(40.dp),
+                    shape = MaterialTheme.shapes.small
+                ) {
+                    Text(
+                        selectedYear.toString(),
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
+                DropdownMenu(
+                    expanded = expandedYear,
+                    onDismissRequest = { expandedYear = false },
+                    modifier = Modifier.fillMaxWidth(0.5f)
+                ) {
+                    availableYears.forEach { year ->
+                        DropdownMenuItem(
+                            text = { Text(year.toString(), style = MaterialTheme.typography.bodyMedium) },
+                            onClick = {
+                                onYearSelected(year)
+                                expandedYear = false
+                            }
+                        )
                     }
                 }
             }
@@ -461,22 +503,35 @@ fun InsightCard(
     val privacyMode = LocalPrivacyMode.current.value
     
     Card(
-        modifier = modifier,
+        modifier = modifier
+            .fillMaxWidth()
+            .animateContentSize(animationSpec = spring(dampingRatio = 0.6f)),
         colors = CardDefaults.cardColors(containerColor = color),
-        shape = MaterialTheme.shapes.medium
+        shape = MaterialTheme.shapes.medium,
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(text = title, style = MaterialTheme.typography.labelMedium)
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                maxLines = 1
+            )
             Text(
                 text = value, 
-                style = MaterialTheme.typography.titleLarge, 
+                style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
-                modifier = if (isSensitive && privacyMode) Modifier.blur(12.dp) else Modifier
+                modifier = if (isSensitive && privacyMode) Modifier.blur(12.dp) else Modifier,
+                maxLines = 1
             )
             Text(
                 text = subtitle, 
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                maxLines = 1
             )
         }
     }
@@ -489,27 +544,98 @@ fun PermissionScreen(
     isPermissionGranted: Boolean
 ) {
     Column(
-        modifier = modifier.fillMaxSize().padding(32.dp),
+        modifier = modifier
+            .fillMaxSize()
+            .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text(text = "📱 Pesa Lens needs SMS access", style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(text = "This app reads your M-Pesa messages to track spending.\n\nYour data stays on your phone.", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
-        Spacer(modifier = Modifier.height(32.dp))
-        Button(onClick = onRequestPermission) { Text("Allow SMS Access") }
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 24.dp),
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer
+            )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "📱",
+                    style = MaterialTheme.typography.displayLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                Text(
+                    text = "SMS Access Required",
+                    style = MaterialTheme.typography.headlineSmall,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "PesaLens reads your M-Pesa messages to track spending. Your data stays on your phone.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                )
+            }
+        }
+
+        Button(
+            onClick = onRequestPermission,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp),
+            shape = MaterialTheme.shapes.medium
+        ) {
+            Text("Allow SMS Access", style = MaterialTheme.typography.labelLarge)
+        }
     }
 }
 
 @Composable
 fun LockScreen(onRetry: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            TinXelLogo()
-            Spacer(modifier = Modifier.height(32.dp))
-            Button(onClick = onRetry) {
-                Text("Unlock App")
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Card(
+            modifier = Modifier
+                .size(120.dp)
+                .padding(bottom = 32.dp),
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer
+            )
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                TinXelLogo(modifier = Modifier.size(80.dp))
             }
+        }
+
+        Text(
+            text = "Unlock to Continue",
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.padding(bottom = 24.dp)
+        )
+
+        Button(
+            onClick = onRetry,
+            modifier = Modifier
+                .fillMaxWidth(0.7f)
+                .height(48.dp),
+            shape = MaterialTheme.shapes.medium
+        ) {
+            Text("Authenticate", style = MaterialTheme.typography.labelLarge)
         }
     }
 }
@@ -521,37 +647,53 @@ fun TransactionCard(transaction: PesaTransaction, onClick: () -> Unit = {}) {
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .animateContentSize(animationSpec = spring(dampingRatio = 0.7f)),
         shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = transaction.name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
                 )
-                Text(
-                    text = transaction.type + if (transaction.fee > 0) " • Fee: Ksh ${transaction.fee}" else "",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (transaction.type == "Received") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                    modifier = if (privacyMode && transaction.fee > 0) Modifier.blur(8.dp) else Modifier
-                )
+                if (transaction.fee > 0) {
+                    Text(
+                        text = transaction.type + " • Fee: Ksh ${transaction.fee}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (transaction.type == "Received") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        modifier = if (privacyMode) Modifier.blur(8.dp) else Modifier,
+                        maxLines = 1
+                    )
+                } else {
+                    Text(
+                        text = transaction.type,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (transaction.type == "Received") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        maxLines = 1
+                    )
+                }
             }
             Text(
-                text = "${if (transaction.type == "Received") "+" else "-"} Ksh ${String.format(Locale.US, "%,.2f", transaction.amount)}",
-                style = MaterialTheme.typography.titleMedium,
+                text = "${if (transaction.type == "Received") "+" else "-"} Ksh ${String.format(Locale.US, "%,.0f", transaction.amount)}",
+                style = MaterialTheme.typography.labelLarge,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold,
                 color = if (transaction.type == "Received") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                modifier = if (privacyMode) Modifier.blur(12.dp) else Modifier
+                modifier = if (privacyMode) Modifier.blur(12.dp) else Modifier,
+                maxLines = 1
             )
         }
     }

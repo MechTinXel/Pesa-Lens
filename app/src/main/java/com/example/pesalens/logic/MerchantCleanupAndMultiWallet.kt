@@ -1,5 +1,7 @@
 package com.example.pesalens.logic
 
+import com.example.pesalens.PesaTransaction
+
 data class MerchantCleanupRule(
     val originalName: String,
     val cleanedName: String,
@@ -49,8 +51,8 @@ class MerchantCleanupRules {
         return rules.values.sortedByDescending { it.usageCount }
     }
 
-    fun suggestCleanups(messy Names: List<String>): List<MerchantCleanupRule> {
-        return messy Names
+    fun suggestCleanups(messyNames: List<String>): List<MerchantCleanupRule> {
+        return messyNames
             .map { name -> rules[name.lowercase()] }
             .filterNotNull()
             .sortedByDescending { it.usageCount }
@@ -116,16 +118,13 @@ class MultipleWalletsTracker {
         startDate: Long,
         endDate: Long
     ): String {
-        val byProvider = wallets.groupBy { it.value.provider }
+        val byProvider = wallets.values.groupBy { it.provider }
             .mapValues { (_, walletList) ->
-                walletList.keys
-                    .mapNotNull { walletId ->
-                        getWalletTransactions(walletId, transactions)
-                            .filter { it.date in startDate..endDate }
-                            .sumOf { it.amount }
-                            .takeIf { it > 0 }
-                    }
-                    .sum()
+                walletList.sumOf { wallet ->
+                    getWalletTransactions(wallet.walletId, transactions)
+                        .filter { it.date in startDate..endDate }
+                        .sumOf { it.amount }
+                }
             }
 
         return byProvider.entries.joinToString("\n") { (provider, total) ->

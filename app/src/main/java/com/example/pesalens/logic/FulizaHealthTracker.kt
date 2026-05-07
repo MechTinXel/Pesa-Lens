@@ -1,5 +1,7 @@
 package com.example.pesalens.logic
 
+import com.example.pesalens.PesaTransaction
+
 data class FulizaHealthTracker(
     val currentUsage: Double = 0.0,
     val totalLimit: Double = 0.0,

@@ -1,5 +1,6 @@
 package com.example.pesalens.logic
 
+import com.example.pesalens.PesaTransaction
 import java.util.*
 
 data class TransportSpend(

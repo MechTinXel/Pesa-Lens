@@ -1,5 +1,7 @@
 package com.example.pesalens.logic
 
+import com.example.pesalens.PesaTransaction
+
 data class BettingTransaction(
     val date: Long,
     val amount: Double,

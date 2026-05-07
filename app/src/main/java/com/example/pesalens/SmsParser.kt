@@ -39,12 +39,13 @@ object SmsParser {
         "174174"  to "Diamond Trust Bank"
     )
 
-    fun parseMessage(message: String, timestamp: Long): PesaTransaction? {
-        return when {
-            NetworkProvider.MPESA.matches(message)  -> parseMpesa(message, timestamp)
-            NetworkProvider.AIRTEL.matches(message) -> parseAirtel(message, timestamp)
-            NetworkProvider.TELKOM.matches(message) -> parseTelkom(message, timestamp)
-            NetworkProvider.FAIBA.matches(message)  -> parseFaiba(message, timestamp)
+    fun parseMessage(message: String, timestamp: Long, providerHint: NetworkProvider? = null): PesaTransaction? {
+        val provider = providerHint ?: detectProvider(message) ?: return null
+        return when (provider) {
+            NetworkProvider.MPESA  -> parseMpesa(message, timestamp)
+            NetworkProvider.AIRTEL -> parseAirtel(message, timestamp)
+            NetworkProvider.TELKOM -> parseTelkom(message, timestamp)
+            NetworkProvider.FAIBA  -> parseFaiba(message, timestamp)
             else -> null
         }
     }
@@ -324,5 +325,6 @@ object SmsParser {
 // Keep MpesaParser as an alias for backward compatibility
 @Deprecated("Use SmsParser instead", ReplaceWith("SmsParser"))
 object MpesaParser {
-    fun parseMessage(message: String, timestamp: Long) = SmsParser.parseMessage(message, timestamp)
+    fun parseMessage(message: String, timestamp: Long, providerHint: NetworkProvider? = null) = 
+        SmsParser.parseMessage(message, timestamp, providerHint)
 }

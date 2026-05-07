@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.dp
 import com.example.pesalens.data.CURRENCIES
 import com.example.pesalens.data.CurrencyOption
 import com.example.pesalens.data.SecureStorage
+import com.example.pesalens.data.SettingsRepository
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
