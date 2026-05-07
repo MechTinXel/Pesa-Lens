@@ -121,21 +121,29 @@ A powerful Android app for tracking, analyzing, and understanding your M-Pesa an
 
 ## 📥 Download
 
-### Latest Release
-Download the APK from [GitHub Releases](https://github.com/MechTinXel/Pesa-Lens/releases)
+### ⭐ Get the Latest APK from GitHub Releases
 
-**Requirements:**
-- Android 8.0 (API 26) or higher
-- SMS Read Permission (for transaction parsing)
-- Biometric capability (fingerprint/face)
+The easiest way to install PesaLens is to download the pre-built APK from the GitHub releases page.
+
+**[👉 DOWNLOAD APK HERE 👈](https://github.com/MechTinXel/Pesa-Lens/releases)**
 
 ### Installation Steps
-1. Download the latest `.apk` file from Releases
-2. Enable "Unknown Sources" in your Android settings
-3. Tap the APK file and select "Install"
-4. Grant SMS read permissions when prompted
-5. Set up biometric authentication
-6. Start tracking!
+1. **Download** - Open the latest release and download `app-debug.apk` or `app-release.apk`
+2. **Enable Unknown Sources** - Go to Settings > Apps > Special app access > Install unknown apps > Enable for your browser/file manager
+3. **Install** - Tap the downloaded APK file and select "Install"
+4. **Grant Permissions** - Allow SMS Read and other permissions when prompted
+5. **Set Security** - Register your biometric (fingerprint/face ID) on first launch
+6. **Start Tracking** - Your transactions will load automatically from SMS history! 🎉
+
+### Requirements
+- ✅ Android 8.0 (API 26) or higher
+- ✅ SMS Read Permission (for transaction parsing)
+- ✅ Biometric capability (fingerprint/face recognition)
+
+### Troubleshooting
+- **"Unknown app" warning?** - This is normal. Tap "Install anyway" or "I understand the risk"
+- **APK won't install?** - Check your Android version is 8.0+
+- **No transactions showing?** - Grant SMS Read permission in Settings > Apps > PesaLens > Permissions
 
 ---
 
@@ -269,6 +277,6 @@ Found a bug? Have suggestions?
 
 **Happy Money Tracking! 🎉**
 
-*TinXel - Where Your Money Matters* 💰
+*TinXel work as play*
 
 

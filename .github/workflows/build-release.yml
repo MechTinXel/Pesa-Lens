@@ -2,6 +2,7 @@ name: Build and Release APK
 
 on:
   push:
+    branches: [ "main" ]
     tags:
       - 'v*'
   workflow_dispatch:
@@ -11,42 +12,108 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Set up JDK 11
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '11'
+          java-version: '17'
           distribution: 'temurin'
+          cache: gradle
 
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: Build APK
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
+
+      - name: Build Release APK
+        continue-on-error: true
         run: ./gradlew assembleRelease
+        env:
+          KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
-      - name: Get version from tag
-        id: tag_name
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-
-      - name: Create Release
-        uses: actions/create-release@v1
-        id: create_release
+      - name: Upload Debug APK Artifact
+        uses: actions/upload-artifact@v4
         with:
+          name: PesaLens-Debug-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload Release APK Artifact (if exists)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PesaLens-Release-APK
+          path: app/build/outputs/apk/release/app-release.apk
+        continue-on-error: true
+
+      - name: Create or Update "Latest" Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: PesaLens Latest Build
+          body: |
+            # PesaLens - Latest Build 📱
+            
+            This is the latest continuous build of PesaLens.
+            
+            ## 📥 How to Install
+            1. Download the APK file below (`app-debug.apk`)
+            2. Enable "Unknown Sources" in Android Settings > Apps & Notifications > Special app access
+            3. Tap the APK file and select "Install"
+            4. Grant SMS read permissions when prompted
+            5. Set up biometric authentication
+            6. Start tracking your money! 💰
+            
+            ## ℹ️ Requirements
+            - Android 8.0 (API 26) or higher
+            - SMS Read Permission
+            - Biometric capability (fingerprint/face)
+          files: |
+            app/build/outputs/apk/debug/app-debug.apk
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release (Version Tags)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/release/app-release.apk
           draft: false
           prerelease: false
-          release_name: ${{ steps.tag_name.outputs.VERSION }}
-          tag_name: ${{ github.ref }}
+          body: |
+            # PesaLens Release ${{ github.ref_name }}
+            
+            ## 📥 Download APK
+            Download and install the APK file below to get the latest version of PesaLens.
+            
+            ## 🚀 Installation Steps
+            1. Download the `.apk` file (either debug or release version)
+            2. Enable "Unknown Sources" in your Android settings
+            3. Tap the APK file and select "Install"
+            4. Grant SMS read permissions when prompted
+            5. Set up biometric authentication
+            6. Start tracking your M-Pesa transactions!
+            
+            ## ✨ What's New
+            Check the commit history for updates in this release.
+            
+            ## 📋 Requirements
+            - **Minimum Android Version:** 8.0 (API 26)
+            - **Target Android Version:** 12+ (API 31+)
+            - **Permissions Required:** 
+              - SMS Read Permission (for transaction parsing)
+              - Biometric Permission (for security)
+            
+            Happy Money Tracking! 🎉
+          generate_release_notes: true
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-
-      - name: Upload Release APK
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./app/build/outputs/apk/release/app-release.apk
-          asset_name: PesaLens-${{ steps.tag_name.outputs.VERSION }}.apk
-          asset_content_type: application/vnd.android.package-archive
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
