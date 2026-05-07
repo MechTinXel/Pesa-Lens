@@ -197,19 +197,24 @@ Quick start:
 - **Storage:** DataStore for preferences, encrypted storage for sensitive data
 - **API:** On-device processing + optional Claude AI
 
-### Build from Source
+### Building & Releasing
+📖 **[Read the Build Guide →](./BUILD.md)**
+
+**Quick Build:**
 ```bash
 git clone https://github.com/MechTinXel/Pesa-Lens.git
 cd PesaLens
 
-# Configure Android SDK
-# Update local.properties with your SDK path
+# Build debug APK
+./gradlew assembleDebug
 
-# Build release APK
-./gradlew assembleRelease
-
-# APK will be in: app/build/outputs/apk/release/
+# APK location: app/build/outputs/apk/debug/app-debug.apk
 ```
+
+### Automated Releases
+- ✅ Push to `main` → Auto-builds and creates "latest" release
+- ✅ Create git tag (`git tag v1.0.0`) → Auto-builds and creates version release
+- ✅ APKs automatically uploaded to GitHub Releases
 
 ### Key Files
 - `MainActivity.kt` - Main UI and screen composition
