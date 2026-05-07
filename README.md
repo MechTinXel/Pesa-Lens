@@ -149,11 +149,15 @@ The easiest way to install PesaLens is to download the pre-built APK from the Gi
 
 ## 🚀 Getting Started
 
-### First Launch
-1. **Security Setup** - Register your fingerprint or face
-2. **Initial Sync** - App reads your SMS history (one-time)
-3. **Choose Currency** - Select your preferred display currency
-4. **Theme Selection** - Pick Light, Dark, or System theme
+### Installation
+📖 **[Read the detailed Installation Guide →](./INSTALLATION.md)**
+
+Quick start:
+1. Download APK from [GitHub Releases](https://github.com/MechTinXel/Pesa-Lens/releases)
+2. Enable "Unknown Sources" in Android Settings
+3. Install the APK
+4. Grant SMS and biometric permissions
+5. Done! ✓
 
 ### Navigation
 - **History** - All transactions chronologically
