@@ -60,7 +60,6 @@ fun AnalyticsScreen(
                     (if (isOutgoing) it.type != "Received" && it.type != "Balance" else it.type == "Received")
         }
     }
-
     // Group by "MMM yyyy" so the year always appears on the label
     val chartData: List<Pair<String, Double>> = remember(filtered) {
         filtered
@@ -304,7 +303,9 @@ private fun ContactBarRow(
     )
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(name, style = MaterialTheme.typography.bodyMedium,
+            Text(
+                name.takeIf { it.isNotBlank() && it != "Unknown" && it != "Unnamed" } ?: "Transaction",
+                style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium, maxLines = 1,
                 modifier = Modifier.weight(1f).padding(end = 8.dp))
             Text("${formatMoney(total, currency, decimals = 0)} - ${count}x",

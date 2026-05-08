@@ -132,8 +132,10 @@ class MainActivity : FragmentActivity() {
         val transactions = mutableListOf<PesaTransaction>()
         if (!hasSmsPermission()) return@withContext transactions
 
+        // Limit to last 6 months for faster loading
+        val sixMonthsAgo = System.currentTimeMillis() - (6L * 30 * 24 * 60 * 60 * 1000)
         val uri: Uri = "content://sms/inbox".toUri()
-        val cursor: Cursor? = contentResolver.query(uri, null, null, null, "date DESC")
+        val cursor: Cursor? = contentResolver.query(uri, null, "date > ?", arrayOf(sixMonthsAgo.toString()), "date DESC")
 
         cursor?.use {
             val bodyColumn = it.getColumnIndex("body")
@@ -192,6 +194,8 @@ fun MainScreen(
     val settingsRepository = remember { SettingsRepository(context) }
     val themeMode by settingsRepository.themeMode.collectAsState(initial = "System")
     val currencyCode by settingsRepository.currencyCode.collectAsState(initial = "KES")
+    val showIncome by settingsRepository.showIncome.collectAsState(initial = true)
+    val showExpenses by settingsRepository.showExpenses.collectAsState(initial = true)
     val selectedCurrency = remember(currencyCode) { currencyForCode(currencyCode) }
     var selectedProviderName by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedYear by rememberSaveable { mutableStateOf(Calendar.getInstance().get(Calendar.YEAR)) }
@@ -214,8 +218,9 @@ fun MainScreen(
         }
     }
 
-    val insights = remember(visibleTransactions) {
-        BudgetEngine.calculateInsights(visibleTransactions)
+    // Defer insights calculation for faster initial UI
+    val insights by produceState<BudgetInsights?>(initialValue = null, visibleTransactions) {
+        value = BudgetEngine.calculateInsights(visibleTransactions)
     }
 
     Scaffold(
@@ -286,37 +291,16 @@ fun MainScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         TinXelLogo(modifier = Modifier.size(32.dp))
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconButton(
-                                onClick = { privacyMode.value = !privacyMode.value },
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Icon(
-                                    if (privacyMode.value) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = "Toggle Privacy",
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    navController.navigate(Screen.Settings.route) {
-                                        popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Icon(Icons.Rounded.Settings, contentDescription = "Settings", modifier = Modifier.size(20.dp))
-                            }
-                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text(
+                            text = "TinXel",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
 
                     // Compact Filter Bar
@@ -330,31 +314,34 @@ fun MainScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Elegant Insights Cards
+                    // Compact Balance & Fuliza Row
                     AnimatedVisibility(
-                        visible = visibleTransactions.isNotEmpty(),
+                        visible = visibleTransactions.isNotEmpty() && insights != null,
                         enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
                         exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
                         modifier = Modifier.padding(horizontal = 12.dp)
                     ) {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             InsightCard(
                                 title = "${selectedProvider?.shortName ?: "Mobile Money"} Balance",
-                                value = formatMoney(insights.mpesaBalance, selectedCurrency, decimals = 0),
+                                value = formatMoney(insights?.mpesaBalance ?: 0.0, selectedCurrency, decimals = 0),
                                 subtitle = "Available Now",
                                 color = MaterialTheme.colorScheme.primaryContainer,
-                                isSensitive = true
+                                isSensitive = true,
+                                modifier = Modifier.weight(1f)
                             )
                             // Only show Fuliza for Safaricom
                             if (selectedProvider == null || selectedProvider == NetworkProvider.MPESA) {
                                 InsightCard(
                                     title = "Fuliza Allowance",
-                                    value = formatMoney(insights.fulizaAllowance, selectedCurrency, decimals = 0),
+                                    value = formatMoney(insights?.fulizaAllowance ?: 0.0, selectedCurrency, decimals = 0),
                                     subtitle = "Spending Limit",
                                     color = MaterialTheme.colorScheme.secondaryContainer,
-                                    isSensitive = true
+                                    isSensitive = true,
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
                         }
@@ -362,6 +349,35 @@ fun MainScreen(
 
                     Spacer(modifier = Modifier.height(4.dp))
 
+                    // Show/hide Money In/Out analytics based on settings
+                    if (showIncome || showExpenses) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (showIncome) {
+                                Button(
+                                    onClick = { navController.navigate(Screen.Incoming.route) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Text("Money In", style = MaterialTheme.typography.labelLarge)
+                                }
+                            }
+                            if (showExpenses) {
+                                Button(
+                                    onClick = { navController.navigate(Screen.Outgoing.route) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Text("Money Out", style = MaterialTheme.typography.labelLarge)
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
                     NavHost(
                         navController = navController,
                         startDestination = Screen.History.route,

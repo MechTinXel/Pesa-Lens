@@ -2,18 +2,18 @@ package com.example.pesalens.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Material 3 - Finance App Palette
-// Primary: Teal (Money/Success)
-val PrimaryLight = Color(0xFF0D7A66)
-val PrimaryDark = Color(0xFF4DD0E1)
+// M-Pesa Inspired Color Palette
+// Primary: M-Pesa Green (Money/Success)
+val PrimaryLight = Color(0xFF00A651)
+val PrimaryDark = Color(0xFF00A651)
 
-// Secondary: Green (Positive/Income)
-val SecondaryLight = Color(0xFF2D8659)
-val SecondaryDark = Color(0xFF66BB6A)
+// Secondary: Light Green (Positive/Income)
+val SecondaryLight = Color(0xFF66BB6A)
+val SecondaryDark = Color(0xFF388E3C)
 
-// Tertiary: Orange (Alerts/Important)
-val TertiaryLight = Color(0xFFD97706)
-val TertiaryDark = Color(0xFFFFB74D)
+// Tertiary: White (Neutral)
+val TertiaryLight = Color(0xFFFFFFFF)
+val TertiaryDark = Color(0xFFFFFFFF)
 
 // Error: Red (Negative/Expense)
 val ErrorLight = Color(0xFFB3261E)
