@@ -5,7 +5,6 @@ import android.content.pm.PackageManager
 import android.database.Cursor
 import android.net.Uri
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -13,9 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -29,13 +26,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
@@ -43,15 +38,15 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.pesalens.data.CURRENCIES
+import com.example.pesalens.data.CurrencyOption
 import com.example.pesalens.data.SettingsRepository
 import com.example.pesalens.data.currencyForCode
 import com.example.pesalens.data.formatMoney
-import com.example.pesalens.logic.AIAssistant
 import com.example.pesalens.logic.BudgetEngine
 import com.example.pesalens.logic.BudgetInsights
-import com.example.pesalens.ui.*
 import com.example.pesalens.ui.components.TinXelLogo
+import com.example.pesalens.ui.Screen
+import com.example.pesalens.ui.navItems
 import com.example.pesalens.ui.screens.*
 import com.example.pesalens.ui.theme.PesaLensTheme
 import kotlinx.coroutines.Dispatchers
@@ -65,8 +60,14 @@ val LocalPrivacyMode = compositionLocalOf { mutableStateOf(false) }
 
 class MainActivity : FragmentActivity() {
 
+    // FIX #1: Single SettingsRepository — removed the duplicate created inside MainScreen.
+    // Previously, MainActivity created one instance and MainScreen created another,
+    // meaning settings changes were written to one but read from the other.
     private lateinit var settingsRepository: SettingsRepository
     private var isUnlocked by mutableStateOf(false)
+
+    // FIX #3: Track biometric error message to show feedback on the lock screen
+    private var biometricErrorMessage by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -87,14 +88,19 @@ class MainActivity : FragmentActivity() {
                         color = MaterialTheme.colorScheme.background
                     ) {
                         if (!isUnlocked) {
-                            LockScreen(onRetry = { showBiometricPrompt() })
+                            // FIX #3: Pass error message to LockScreen so users know what went wrong
+                            LockScreen(
+                                onRetry = {
+                                    biometricErrorMessage = null
+                                    showBiometricPrompt()
+                                },
+                                errorMessage = biometricErrorMessage
+                            )
                         } else if (hasSmsPermission()) {
+                            // FIX #1: Pass the single settingsRepository down — no new instance created inside
                             MainScreen(
-                                onLoadTransactions = { loadMpesaMessages() },
-                                currentTheme = themeMode,
-                                onThemeChange = { mode ->
-                                    scope.launch { settingsRepository.setThemeMode(mode) }
-                                }
+                                settingsRepository = settingsRepository,
+                                onLoadTransactions = { loadMpesaMessages() }
                             )
                         } else {
                             PermissionScreen(
@@ -116,6 +122,26 @@ class MainActivity : FragmentActivity() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                     super.onAuthenticationSucceeded(result)
                     isUnlocked = true
+                    biometricErrorMessage = null
+                }
+
+                // FIX #3: Handle hard errors (sensor unavailable, lockout, user cancelled)
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    super.onAuthenticationError(errorCode, errString)
+                    // Don't show an error for user-initiated cancellations (negative button = exit)
+                    if (errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON &&
+                        errorCode != BiometricPrompt.ERROR_USER_CANCELED
+                    ) {
+                        biometricErrorMessage = errString.toString()
+                    }
+                }
+
+                // FIX #3: Handle soft failures (wrong finger, face not recognised)
+                // The system shows its own feedback for these, but we can track them
+                override fun onAuthenticationFailed() {
+                    super.onAuthenticationFailed()
+                    // System already shows "Not recognised" — no extra message needed here
+                    // but you could increment a counter and offer a PIN fallback after 3 tries
                 }
             })
 
@@ -132,10 +158,11 @@ class MainActivity : FragmentActivity() {
         val transactions = mutableListOf<PesaTransaction>()
         if (!hasSmsPermission()) return@withContext transactions
 
-        // Limit to last 6 months for faster loading
         val sixMonthsAgo = System.currentTimeMillis() - (6L * 30 * 24 * 60 * 60 * 1000)
         val uri: Uri = "content://sms/inbox".toUri()
-        val cursor: Cursor? = contentResolver.query(uri, null, "date > ?", arrayOf(sixMonthsAgo.toString()), "date DESC")
+        val cursor: Cursor? = contentResolver.query(
+            uri, null, "date > ?", arrayOf(sixMonthsAgo.toString()), "date DESC"
+        )
 
         cursor?.use {
             val bodyColumn = it.getColumnIndex("body")
@@ -160,23 +187,35 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun hasSmsPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
+        return ContextCompat.checkSelfPermission(
+            this, Manifest.permission.READ_SMS
+        ) == PackageManager.PERMISSION_GRANTED
     }
 
     private fun requestPermission() {
         permissionLauncher.launch(Manifest.permission.READ_SMS)
     }
 
-    private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { _ ->
-        recreate()
-    }
+    // FIX #6: Only recreate if permission was actually granted.
+    // Previously `_` discarded the result, so denial also triggered recreate(),
+    // causing an infinite loop of permission dialogs.
+    private val permissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            if (isGranted) {
+                recreate()
+            }
+            // If denied: the PermissionScreen remains visible with its "Allow SMS Access" button.
+            // On Android 11+, if the user has permanently denied, direct them to Settings instead
+            // (see PermissionScreen for the shouldShowRequestPermissionRationale handling).
+        }
 }
 
+// FIX #1: Removed currentTheme / onThemeChange parameters — MainScreen now reads directly from
+// the passed-in settingsRepository, eliminating the duplicate instance that was ignoring them.
 @Composable
 fun MainScreen(
-    onLoadTransactions: suspend () -> List<PesaTransaction>,
-    currentTheme: String,
-    onThemeChange: (String) -> Unit
+    settingsRepository: SettingsRepository,
+    onLoadTransactions: suspend () -> List<PesaTransaction>
 ) {
     val navController = rememberNavController()
     var transactions by remember { mutableStateOf(listOf<PesaTransaction>()) }
@@ -190,16 +229,20 @@ fun MainScreen(
 
     var isRefreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
-    val settingsRepository = remember { SettingsRepository(context) }
+
+    // FIX #1: All settings now come from the single repository passed from MainActivity
     val themeMode by settingsRepository.themeMode.collectAsState(initial = "System")
     val currencyCode by settingsRepository.currencyCode.collectAsState(initial = "KES")
     val showIncome by settingsRepository.showIncome.collectAsState(initial = true)
     val showExpenses by settingsRepository.showExpenses.collectAsState(initial = true)
     val selectedCurrency = remember(currencyCode) { currencyForCode(currencyCode) }
+
     var selectedProviderName by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedYear by rememberSaveable { mutableStateOf(Calendar.getInstance().get(Calendar.YEAR)) }
-    val selectedProvider = selectedProviderName?.let { runCatching { NetworkProvider.valueOf(it) }.getOrNull() }
+    val selectedProvider = selectedProviderName?.let {
+        runCatching { NetworkProvider.valueOf(it) }.getOrNull()
+    }
+
     val availableYears = remember(transactions) {
         transactions.map { transactionYear(it.date) }.distinct().sortedDescending()
     }
@@ -214,21 +257,21 @@ fun MainScreen(
     val visibleTransactions = remember(transactions, selectedProvider, selectedYear) {
         transactions.filter { transaction ->
             (selectedProvider == null || transaction.provider == selectedProvider) &&
-                transactionYear(transaction.date) == selectedYear
+                    transactionYear(transaction.date) == selectedYear
         }
     }
 
-    // Defer insights calculation for faster initial UI
     val insights by produceState<BudgetInsights?>(initialValue = null, visibleTransactions) {
         value = BudgetEngine.calculateInsights(visibleTransactions)
     }
+
+    // FIX #6 (improvement): Track the privacy toggle state here so the header can control it
+    val privacyModeState = LocalPrivacyMode.current
 
     Scaffold(
         bottomBar = {
             val navBackStackEntry by navController.currentBackStackEntryAsState()
             val currentRoute = navBackStackEntry?.destination?.route
-            
-            // Filter out Settings from bottom bar
             val bottomNavItems = navItems.filter { it.route != Screen.Settings.route }
 
             NavigationBar(
@@ -262,14 +305,26 @@ fun MainScreen(
     ) { innerPadding ->
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(
-                    strokeCap = StrokeCap.Round,
-                    modifier = Modifier.size(48.dp)
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(
+                        strokeCap = StrokeCap.Round,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    // FIX (improvement): Show a message so users know what's happening
+                    Text(
+                        text = "Reading your transactions…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    Text(
+                        text = "This may take a moment",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                    )
+                }
             }
         } else {
-            val privacyMode = LocalPrivacyMode.current
-            
             PullToRefreshBox(
                 isRefreshing = isRefreshing,
                 onRefresh = {
@@ -286,24 +341,56 @@ fun MainScreen(
                         .fillMaxSize()
                         .padding(innerPadding)
                 ) {
-                    // Minimalist Top Header
+                    // FIX (improvement): Header now includes privacy toggle (left) and settings (right)
+                    // Previously only the logo was shown — the privacy toggle was missing from the UI
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.Center,
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TinXelLogo(modifier = Modifier.size(32.dp))
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Text(
-                            text = "TinXel",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                        // Privacy toggle on the left
+                        IconButton(
+                            onClick = { privacyModeState.value = !privacyModeState.value },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (privacyModeState.value)
+                                    Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                contentDescription = if (privacyModeState.value)
+                                    "Show amounts" else "Hide amounts",
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                        }
+
+                        // Centered logo
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            TinXelLogo(modifier = Modifier.size(28.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "TinXel",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        // Settings icon on the right
+                        IconButton(
+                            onClick = { navController.navigate(Screen.Settings.route) },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Settings,
+                                contentDescription = "Settings",
+                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                        }
                     }
 
-                    // Compact Filter Bar
                     TransactionFilterBar(
                         selectedProviderName = selectedProviderName,
                         onProviderSelected = { selectedProviderName = it },
@@ -314,7 +401,6 @@ fun MainScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Compact Balance & Fuliza Row
                     AnimatedVisibility(
                         visible = visibleTransactions.isNotEmpty() && insights != null,
                         enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
@@ -333,7 +419,6 @@ fun MainScreen(
                                 isSensitive = true,
                                 modifier = Modifier.weight(1f)
                             )
-                            // Only show Fuliza for Safaricom
                             if (selectedProvider == null || selectedProvider == NetworkProvider.MPESA) {
                                 InsightCard(
                                     title = "Fuliza Allowance",
@@ -349,8 +434,9 @@ fun MainScreen(
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    // Show/hide Money In/Out analytics based on settings
-                    if (showIncome || showExpenses) {
+                    // FIX (improvement): Only show Money In/Out buttons after insights have loaded
+                    // to avoid navigating to screens with incomplete data
+                    if ((showIncome || showExpenses) && insights != null) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -377,23 +463,35 @@ fun MainScreen(
                             }
                         }
                     }
+
                     Spacer(modifier = Modifier.height(2.dp))
+
                     NavHost(
                         navController = navController,
                         startDestination = Screen.History.route,
                         modifier = Modifier.weight(1f),
                         enterTransition = {
-                            fadeIn(animationSpec = tween(300)) + scaleIn(initialScale = 0.95f, animationSpec = tween(300))
+                            fadeIn(animationSpec = tween(300)) +
+                                    scaleIn(initialScale = 0.95f, animationSpec = tween(300))
                         },
                         exitTransition = {
-                            fadeOut(animationSpec = tween(300)) + scaleOut(targetScale = 0.95f, animationSpec = tween(300))
+                            fadeOut(animationSpec = tween(300)) +
+                                    scaleOut(targetScale = 0.95f, animationSpec = tween(300))
                         }
                     ) {
-                        composable(Screen.History.route) { HistoryScreen(visibleTransactions, selectedCurrency) }
-                        composable(Screen.Outgoing.route) { AnalyticsScreen("Expenses", visibleTransactions, true, selectedCurrency) }
-                        composable(Screen.Incoming.route) { AnalyticsScreen("Income", visibleTransactions, false, selectedCurrency) }
-                        composable(Screen.AI.route) { AIScreen(visibleTransactions) }
-                        composable(Screen.Settings.route) { 
+                        composable(Screen.History.route) {
+                            HistoryScreen(visibleTransactions, selectedCurrency)
+                        }
+                        composable(Screen.Outgoing.route) {
+                            AnalyticsScreen("Expenses", visibleTransactions, true, selectedCurrency)
+                        }
+                        composable(Screen.Incoming.route) {
+                            AnalyticsScreen("Income", visibleTransactions, false, selectedCurrency)
+                        }
+                        composable(Screen.AI.route) {
+                            AIScreen(visibleTransactions)
+                        }
+                        composable(Screen.Settings.route) {
                             SettingsScreen(
                                 currentTheme = themeMode,
                                 onThemeChange = { mode ->
@@ -430,7 +528,6 @@ private fun TransactionFilterBar(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Provider Dropdown
         Box(modifier = Modifier.weight(1f)) {
             OutlinedButton(
                 onClick = { expandedProvider = !expandedProvider },
@@ -457,7 +554,8 @@ private fun TransactionFilterBar(
                         expandedProvider = false
                     }
                 )
-                NetworkProvider.values().forEach { provider ->
+                // FIX (improvement): .entries replaces deprecated .values()
+                NetworkProvider.entries.forEach { provider ->
                     DropdownMenuItem(
                         text = { Text(provider.shortName, style = MaterialTheme.typography.bodyMedium) },
                         onClick = {
@@ -469,7 +567,6 @@ private fun TransactionFilterBar(
             }
         }
 
-        // Year Dropdown
         if (availableYears.isNotEmpty()) {
             Box(modifier = Modifier.weight(0.8f)) {
                 OutlinedButton(
@@ -517,7 +614,7 @@ fun InsightCard(
     isSensitive: Boolean = false
 ) {
     val privacyMode = LocalPrivacyMode.current.value
-    
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -537,14 +634,14 @@ fun InsightCard(
                 maxLines = 1
             )
             Text(
-                text = value, 
+                text = value,
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 modifier = if (isSensitive && privacyMode) Modifier.blur(12.dp) else Modifier,
                 maxLines = 1
             )
             Text(
-                text = subtitle, 
+                text = subtitle,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 maxLines = 1
@@ -614,17 +711,24 @@ fun PermissionScreen(
     }
 }
 
+// FIX #3: Added errorMessage parameter so users see what went wrong
+// FIX #2: Removed `.padding(bottom = 32.dp)` from inside `.size(120.dp)` — padding was
+//         eating into the card's fixed size and clipping the logo inside it.
 @Composable
-fun LockScreen(onRetry: () -> Unit) {
+fun LockScreen(
+    onRetry: () -> Unit,
+    errorMessage: String? = null
+) {
     Column(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        // FIX #2: Card has its own size, Spacer provides the gap below it
         Card(
-            modifier = Modifier
-                .size(120.dp)
-                .padding(bottom = 32.dp),
+            modifier = Modifier.size(120.dp),
             shape = MaterialTheme.shapes.large,
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.secondaryContainer
@@ -638,11 +742,26 @@ fun LockScreen(onRetry: () -> Unit) {
             }
         }
 
+        Spacer(modifier = Modifier.height(32.dp))
+
         Text(
             text = "Unlock to Continue",
             style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier.padding(bottom = 24.dp)
+            modifier = Modifier.padding(bottom = 8.dp)
         )
+
+        // FIX #3: Show error message if biometric failed, so user isn't left confused
+        if (errorMessage != null) {
+            Text(
+                text = errorMessage,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+        } else {
+            Spacer(modifier = Modifier.height(16.dp))
+        }
 
         Button(
             onClick = onRetry,
@@ -655,10 +774,18 @@ fun LockScreen(onRetry: () -> Unit) {
         }
     }
 }
+
+// FIX #4: Added `currency: CurrencyOption` parameter so amounts display in the user's chosen currency
+//         instead of always showing "Ksh" regardless of Settings.
+// FIX #5: Applied privacy blur consistently to ALL text rows, not just the fee line.
 @Composable
-fun TransactionCard(transaction: PesaTransaction, onClick: () -> Unit = {}) {
+fun TransactionCard(
+    transaction: PesaTransaction,
+    currency: CurrencyOption,
+    onClick: () -> Unit = {}
+) {
     val privacyMode = LocalPrivacyMode.current.value
-    
+
     Card(
         onClick = onClick,
         modifier = Modifier
@@ -685,11 +812,16 @@ fun TransactionCard(transaction: PesaTransaction, onClick: () -> Unit = {}) {
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1
                 )
+                val typeColor = if (transaction.type == "Received")
+                    MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+
+                // FIX #5: Both the fee line AND the plain type line now get the blur modifier
                 if (transaction.fee > 0) {
                     Text(
-                        text = transaction.type + " • Fee: Ksh ${transaction.fee}",
+                        // FIX #4: Fee also converted via formatMoney instead of hardcoded Ksh
+                        text = "${transaction.type} • Fee: ${formatMoney(transaction.fee, currency, decimals = 0)}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (transaction.type == "Received") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        color = typeColor,
                         modifier = if (privacyMode) Modifier.blur(8.dp) else Modifier,
                         maxLines = 1
                     )
@@ -697,17 +829,24 @@ fun TransactionCard(transaction: PesaTransaction, onClick: () -> Unit = {}) {
                     Text(
                         text = transaction.type,
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (transaction.type == "Received") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        color = typeColor,
+                        // FIX #5: Was missing the blur modifier — now consistent with the fee line
+                        modifier = if (privacyMode) Modifier.blur(8.dp) else Modifier,
                         maxLines = 1
                     )
                 }
             }
+
+            // FIX #4: Use formatMoney() with the selected currency instead of hardcoded "Ksh"
             Text(
-                text = "${if (transaction.type == "Received") "+" else "-"} Ksh ${String.format(Locale.US, "%,.0f", transaction.amount)}",
+                text = "${if (transaction.type == "Received") "+" else "-"} ${
+                    formatMoney(transaction.amount, currency, decimals = 0)
+                }",
                 style = MaterialTheme.typography.labelLarge,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold,
-                color = if (transaction.type == "Received") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                color = if (transaction.type == "Received")
+                    MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                 modifier = if (privacyMode) Modifier.blur(12.dp) else Modifier,
                 maxLines = 1
             )
