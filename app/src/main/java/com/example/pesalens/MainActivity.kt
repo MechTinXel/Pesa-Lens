@@ -440,25 +440,35 @@ fun MainScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                .padding(horizontal = 12.dp, vertical = 2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             if (showIncome) {
-                                Button(
+                                OutlinedButton(
                                     onClick = { navController.navigate(Screen.Incoming.route) },
-                                    modifier = Modifier.weight(1f),
-                                    shape = MaterialTheme.shapes.small
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(36.dp),
+                                    shape = MaterialTheme.shapes.small,
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = MaterialTheme.colorScheme.primary
+                                    )
                                 ) {
-                                    Text("Money In", style = MaterialTheme.typography.labelLarge)
+                                    Text("Money In", style = MaterialTheme.typography.labelSmall)
                                 }
                             }
                             if (showExpenses) {
-                                Button(
+                                OutlinedButton(
                                     onClick = { navController.navigate(Screen.Outgoing.route) },
-                                    modifier = Modifier.weight(1f),
-                                    shape = MaterialTheme.shapes.small
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(36.dp),
+                                    shape = MaterialTheme.shapes.small,
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = MaterialTheme.colorScheme.error
+                                    )
                                 ) {
-                                    Text("Money Out", style = MaterialTheme.typography.labelLarge)
+                                    Text("Money Out", style = MaterialTheme.typography.labelSmall)
                                 }
                             }
                         }

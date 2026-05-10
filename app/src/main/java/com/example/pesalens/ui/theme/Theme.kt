@@ -31,7 +31,7 @@ private val LightColorScheme = lightColorScheme(
 @Composable
 fun PesaLensTheme(
     themeMode: String = "System",
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false, // Disabled to ensure M-Pesa green shows
     content: @Composable () -> Unit
 ) {
     val darkTheme = when (themeMode) {
