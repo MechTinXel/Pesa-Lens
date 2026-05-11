@@ -34,11 +34,13 @@ import androidx.compose.ui.unit.dp
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import com.google.firebase.FirebaseApp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.pesalens.data.CurrencyOption
+import com.example.pesalens.data.FirebaseSyncService
 import com.example.pesalens.data.SettingsRepository
 import com.example.pesalens.data.currencyForCode
 import com.example.pesalens.data.formatMoney
@@ -73,6 +75,9 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         settingsRepository = SettingsRepository(this)
+
+        // Initialize Firebase
+        FirebaseApp.initializeApp(this)
 
         showBiometricPrompt()
 
@@ -227,15 +232,35 @@ fun MainScreen(
         isLoading = false
     }
 
-    var isRefreshing by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-
     // FIX #1: All settings now come from the single repository passed from MainActivity
     val themeMode by settingsRepository.themeMode.collectAsState(initial = "System")
     val currencyCode by settingsRepository.currencyCode.collectAsState(initial = "KES")
     val showIncome by settingsRepository.showIncome.collectAsState(initial = true)
     val showExpenses by settingsRepository.showExpenses.collectAsState(initial = true)
+    val cloudSyncEnabled by settingsRepository.cloudSyncEnabled.collectAsState(initial = false)
     val selectedCurrency = remember(currencyCode) { currencyForCode(currencyCode) }
+
+    // Cloud sync when enabled and transactions loaded
+    val syncService = remember { FirebaseSyncService() }
+
+    LaunchedEffect(transactions, cloudSyncEnabled) {
+        if (cloudSyncEnabled && transactions.isNotEmpty()) {
+            try {
+                // Sign in anonymously if not already authenticated
+                if (!syncService.isAuthenticated) {
+                    syncService.signInAnonymously().getOrThrow()
+                }
+                // Sync transactions to cloud
+                syncService.syncTransactions(transactions).getOrThrow()
+            } catch (e: Exception) {
+                // Silently fail for now - cloud sync is optional
+                // Could add user notification in future
+            }
+        }
+    }
+
+    var isRefreshing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     var selectedProviderName by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedYear by rememberSaveable { mutableStateOf(Calendar.getInstance().get(Calendar.YEAR)) }

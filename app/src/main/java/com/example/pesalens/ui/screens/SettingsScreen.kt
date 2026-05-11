@@ -44,6 +44,7 @@ fun SettingsScreen(
 
     val showIncome by settingsRepository.showIncome.collectAsState(initial = true)
     val showExpenses by settingsRepository.showExpenses.collectAsState(initial = true)
+    val cloudSyncEnabled by settingsRepository.cloudSyncEnabled.collectAsState(initial = false)
     val scope = rememberCoroutineScope()
 
     val selectedCurrency = CURRENCIES.firstOrNull { it.code == currentCurrency } ?: CURRENCIES.first()
@@ -176,6 +177,60 @@ fun SettingsScreen(
                             "The AI Advisor works offline without a paid API. Add a Claude key only if you want cloud analysis; your key is stored encrypted on-device.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+            }
+
+            // ── Cloud Sync ───────────────────────────────────────────────────
+            item {
+                Spacer(Modifier.height(4.dp))
+                SettingsSectionHeader("Cloud Sync")
+            }
+            item {
+                SettingsCard {
+                    ListItem(
+                        headlineContent = { Text("Cloud Backup", fontWeight = FontWeight.Medium) },
+                        supportingContent = { Text("Sync data across devices (optional)", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline) },
+                        leadingContent = {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Rounded.Cloud, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        },
+                        trailingContent = {
+                            Switch(
+                                checked = cloudSyncEnabled,
+                                onCheckedChange = { scope.launch { settingsRepository.setCloudSyncEnabled(it) } }
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+            item {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Icon(Icons.Rounded.Info, null,
+                            tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(18.dp))
+                        Text(
+                            "Cloud sync is anonymous and encrypted. Enable to backup your data and access from multiple devices. Works offline-first.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     }
                 }

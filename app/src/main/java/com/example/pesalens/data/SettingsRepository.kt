@@ -39,12 +39,14 @@ class SettingsRepository(context: Context) {
         val CURRENCY_KEY = stringPreferencesKey("currency_code")
         val SHOW_INCOME_KEY = booleanPreferencesKey("show_income")
         val SHOW_EXPENSES_KEY = booleanPreferencesKey("show_expenses")
+        val CLOUD_SYNC_KEY = booleanPreferencesKey("cloud_sync_enabled")
     }
 
     val themeMode = dataStore.data.map { it[THEME_KEY] ?: "System" }
     val currencyCode = dataStore.data.map { it[CURRENCY_KEY] ?: "KES" }
     val showIncome = dataStore.data.map { it[SHOW_INCOME_KEY] ?: true }
     val showExpenses = dataStore.data.map { it[SHOW_EXPENSES_KEY] ?: true }
+    val cloudSyncEnabled = dataStore.data.map { it[CLOUD_SYNC_KEY] ?: false }
 
     suspend fun setThemeMode(mode: String) {
         dataStore.edit { it[THEME_KEY] = mode }
@@ -60,5 +62,9 @@ class SettingsRepository(context: Context) {
 
     suspend fun setShowExpenses(show: Boolean) {
         dataStore.edit { it[SHOW_EXPENSES_KEY] = show }
+    }
+
+    suspend fun setCloudSyncEnabled(enabled: Boolean) {
+        dataStore.edit { it[CLOUD_SYNC_KEY] = enabled }
     }
 }
