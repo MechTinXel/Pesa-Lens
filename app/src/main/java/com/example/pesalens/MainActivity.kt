@@ -35,6 +35,7 @@ import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import com.google.firebase.FirebaseApp
+import com.google.firebase.FirebaseOptions
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -73,11 +74,17 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Initialize Firebase
+        try {
+            FirebaseApp.initializeApp(this)
+        } catch (e: Exception) {
+            // If it fails (likely due to missing google-services.json), we'll handle it gracefully
+            // or let the cloud sync service handle its own failures.
+        }
+
         enableEdgeToEdge()
         settingsRepository = SettingsRepository(this)
-
-        // Initialize Firebase
-        FirebaseApp.initializeApp(this)
 
         showBiometricPrompt()
 

@@ -15,18 +15,23 @@ import kotlinx.coroutines.flow.flow
  */
 class FirebaseSyncService {
 
-    private val auth = FirebaseAuth.getInstance()
-    private val firestore = FirebaseFirestore.getInstance()
+    private val auth by lazy { 
+        try { com.google.firebase.auth.FirebaseAuth.getInstance() } catch (e: Exception) { null }
+    }
+    private val firestore by lazy { 
+        try { com.google.firebase.firestore.FirebaseFirestore.getInstance() } catch (e: Exception) { null }
+    }
 
     // Authentication state
     val isAuthenticated: Boolean
-        get() = auth.currentUser != null
+        get() = auth?.currentUser != null
 
     val currentUserId: String?
-        get() = auth.currentUser?.uid
+        get() = auth?.currentUser?.uid
 
     // Anonymous authentication for basic sync
     suspend fun signInAnonymously(): Result<String> {
+        val auth = auth ?: return Result.failure(Exception("Firebase not initialized"))
         return try {
             val result = auth.signInAnonymously().await()
             Result.success(result.user?.uid ?: "")
@@ -37,6 +42,7 @@ class FirebaseSyncService {
 
     // Sync transaction data to cloud
     suspend fun syncTransactions(transactions: List<PesaTransaction>): Result<Unit> {
+        val firestore = firestore ?: return Result.failure(Exception("Firebase not initialized"))
         return try {
             val userId = currentUserId ?: return Result.failure(Exception("Not authenticated"))
 
@@ -79,6 +85,7 @@ class FirebaseSyncService {
 
     // Get synced transactions from cloud
     fun getSyncedTransactions(): Flow<List<PesaTransaction>> = flow {
+        val firestore = firestore ?: return@flow
         try {
             val userId = currentUserId ?: return@flow
 
@@ -115,6 +122,7 @@ class FirebaseSyncService {
 
     // Sync user settings
     suspend fun syncSettings(settings: Map<String, Any>): Result<Unit> {
+        val firestore = firestore ?: return Result.failure(Exception("Firebase not initialized"))
         return try {
             val userId = currentUserId ?: return Result.failure(Exception("Not authenticated"))
 
@@ -133,6 +141,7 @@ class FirebaseSyncService {
 
     // Get synced settings
     suspend fun getSyncedSettings(): Result<Map<String, Any>> {
+        val firestore = firestore ?: return Result.failure(Exception("Firebase not initialized"))
         return try {
             val userId = currentUserId ?: return Result.failure(Exception("Not authenticated"))
 
@@ -152,6 +161,6 @@ class FirebaseSyncService {
 
     // Sign out
     fun signOut() {
-        auth.signOut()
+        auth?.signOut()
     }
 }
