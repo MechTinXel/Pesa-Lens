@@ -53,7 +53,7 @@ enum class NetworkProvider(
     companion object {
         fun detect(message: String, sender: String? = null): NetworkProvider? {
             val combined = listOfNotNull(sender, message).joinToString(" ")
-            values()
+            entries
                 .filter { it != OTHER }
                 .firstOrNull { it.matches(combined) }
                 ?.let { return it }
@@ -95,5 +95,6 @@ data class PesaTransaction(
     val balance: Double? = null,
     val fulizaLimit: Double? = null,
     val provider: NetworkProvider = NetworkProvider.OTHER,
-    val reference: String? = null
+    val reference: String? = null,
+    val isFuliza: Boolean = false
 )

@@ -103,8 +103,13 @@ object SmsParser {
         val isAirtime  = message.contains("airtime", ignoreCase = true) && !isReceived
         val isReversed = message.contains("reversed", ignoreCase = true)
 
+        val isFulizaBorrow = isFuliza && (message.contains("overdraw", ignoreCase = true) || isSentTo || isPaidTo || isPaybill || isWithdraw)
+        val isFulizaRepay  = isFuliza && (message.contains("repaid", ignoreCase = true) || message.contains("deducted", ignoreCase = true))
+
         val type = when {
             isReversed          -> "Reversed"
+            isFulizaBorrow      -> "Fuliza Borrow"
+            isFulizaRepay       -> "Fuliza Repay"
             isFuliza || isMshwari -> "Debt/Loan"
             isWithdraw          -> "Withdraw"
             isDeposit           -> "Deposit"
@@ -142,7 +147,8 @@ object SmsParser {
             balance     = balance,
             fulizaLimit = fulizaLimit,
             provider    = NetworkProvider.MPESA,
-            reference   = ref
+            reference   = ref,
+            isFuliza    = isFuliza
         )
     }
 
@@ -319,7 +325,7 @@ object SmsParser {
 
     /** Detect which provider sent this SMS (for filtering in MainActivity) */
     fun detectProvider(message: String): NetworkProvider? =
-        NetworkProvider.values().firstOrNull { it.matches(message) }
+        NetworkProvider.entries.firstOrNull { it.matches(message) }
 }
 
 // Keep MpesaParser as an alias for backward compatibility

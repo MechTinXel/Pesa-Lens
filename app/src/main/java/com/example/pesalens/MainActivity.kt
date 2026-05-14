@@ -47,7 +47,9 @@ import com.example.pesalens.data.currencyForCode
 import com.example.pesalens.data.formatMoney
 import com.example.pesalens.logic.BudgetEngine
 import com.example.pesalens.logic.BudgetInsights
+import com.example.pesalens.ui.components.InsightCard
 import com.example.pesalens.ui.components.TinXelLogo
+import com.example.pesalens.ui.components.TransactionCard
 import com.example.pesalens.ui.Screen
 import com.example.pesalens.ui.navItems
 import com.example.pesalens.ui.screens.*
@@ -152,7 +154,7 @@ class MainActivity : FragmentActivity() {
                 // The system shows its own feedback for these, but we can track them
                 override fun onAuthenticationFailed() {
                     super.onAuthenticationFailed()
-                    // System already shows "Not recognised" — no extra message needed here
+                    // System already shows "Not recognized" — no extra message needed here
                     // but you could increment a counter and offer a PIN fallback after 3 tries
                 }
             })
@@ -190,7 +192,7 @@ class MainActivity : FragmentActivity() {
 
                 val provider = NetworkProvider.detect(message, sender)
                 if (provider != null) {
-                    val parsed = MpesaParser.parseMessage(message, timestamp, provider)
+                    val parsed = SmsParser.parseMessage(message, timestamp, provider)
                     parsed?.let { transaction -> transactions.add(transaction) }
                 }
             }
@@ -423,94 +425,9 @@ fun MainScreen(
                         }
                     }
 
-                    TransactionFilterBar(
-                        selectedProviderName = selectedProviderName,
-                        onProviderSelected = { selectedProviderName = it },
-                        availableYears = availableYears,
-                        selectedYear = selectedYear,
-                        onYearSelected = { selectedYear = it }
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    AnimatedVisibility(
-                        visible = visibleTransactions.isNotEmpty() && insights != null,
-                        enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
-                        exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
-                        modifier = Modifier.padding(horizontal = 12.dp)
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            InsightCard(
-                                title = "${selectedProvider?.shortName ?: "Mobile Money"} Balance",
-                                value = formatMoney(insights?.mpesaBalance ?: 0.0, selectedCurrency, decimals = 0),
-                                subtitle = "Available Now",
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                isSensitive = true,
-                                modifier = Modifier.weight(1f)
-                            )
-                            if (selectedProvider == null || selectedProvider == NetworkProvider.MPESA) {
-                                InsightCard(
-                                    title = "Fuliza Allowance",
-                                    value = formatMoney(insights?.fulizaAllowance ?: 0.0, selectedCurrency, decimals = 0),
-                                    subtitle = "Spending Limit",
-                                    color = MaterialTheme.colorScheme.secondaryContainer,
-                                    isSensitive = true,
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    // FIX (improvement): Only show Money In/Out buttons after insights have loaded
-                    // to avoid navigating to screens with incomplete data
-                    if ((showIncome || showExpenses) && insights != null) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 2.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            if (showIncome) {
-                                OutlinedButton(
-                                    onClick = { navController.navigate(Screen.Incoming.route) },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(36.dp),
-                                    shape = MaterialTheme.shapes.small,
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        contentColor = MaterialTheme.colorScheme.primary
-                                    )
-                                ) {
-                                    Text("Money In", style = MaterialTheme.typography.labelSmall)
-                                }
-                            }
-                            if (showExpenses) {
-                                OutlinedButton(
-                                    onClick = { navController.navigate(Screen.Outgoing.route) },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(36.dp),
-                                    shape = MaterialTheme.shapes.small,
-                                    colors = ButtonDefaults.outlinedButtonColors(
-                                        contentColor = MaterialTheme.colorScheme.error
-                                    )
-                                ) {
-                                    Text("Money Out", style = MaterialTheme.typography.labelSmall)
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(2.dp))
-
                     NavHost(
                         navController = navController,
-                        startDestination = Screen.History.route,
+                        startDestination = Screen.Dashboard.route,
                         modifier = Modifier.weight(1f),
                         enterTransition = {
                             fadeIn(animationSpec = tween(300)) +
@@ -521,17 +438,28 @@ fun MainScreen(
                                     scaleOut(targetScale = 0.95f, animationSpec = tween(300))
                         }
                     ) {
+                        composable(Screen.Dashboard.route) {
+                            DashboardScreen(
+                                transactions = transactions,
+                                selectedCurrency = selectedCurrency,
+                                insights = insights,
+                                selectedProviderName = selectedProviderName,
+                                onProviderSelected = { selectedProviderName = it },
+                                availableYears = availableYears,
+                                selectedYear = selectedYear,
+                                onYearSelected = { selectedYear = it },
+                                showIncome = showIncome,
+                                showExpenses = showExpenses,
+                                onNavigateToExpenses = { },
+                                onNavigateToIncome = { },
+                                onNavigateToFuliza = { navController.navigate(Screen.Fuliza.route) }
+                            )
+                        }
                         composable(Screen.History.route) {
-                            HistoryScreen(visibleTransactions, selectedCurrency)
+                            HistoryScreen(transactions, selectedCurrency)
                         }
-                        composable(Screen.Outgoing.route) {
-                            AnalyticsScreen("Expenses", visibleTransactions, true, selectedCurrency)
-                        }
-                        composable(Screen.Incoming.route) {
-                            AnalyticsScreen("Income", visibleTransactions, false, selectedCurrency)
-                        }
-                        composable(Screen.AI.route) {
-                            AIScreen(visibleTransactions)
+                        composable(Screen.Fuliza.route) {
+                            FulizaScreen(transactions, selectedCurrency, onBack = { navController.popBackStack() })
                         }
                         composable(Screen.Settings.route) {
                             SettingsScreen(
@@ -552,145 +480,8 @@ fun MainScreen(
     }
 }
 
-@Composable
-private fun TransactionFilterBar(
-    selectedProviderName: String?,
-    onProviderSelected: (String?) -> Unit,
-    availableYears: List<Int>,
-    selectedYear: Int,
-    onYearSelected: (Int) -> Unit
-) {
-    var expandedProvider by remember { mutableStateOf(false) }
-    var expandedYear by remember { mutableStateOf(false) }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(modifier = Modifier.weight(1f)) {
-            OutlinedButton(
-                onClick = { expandedProvider = !expandedProvider },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(40.dp),
-                shape = MaterialTheme.shapes.small
-            ) {
-                Text(
-                    selectedProviderName?.let { NetworkProvider.valueOf(it).shortName } ?: "All",
-                    style = MaterialTheme.typography.labelMedium,
-                    maxLines = 1
-                )
-            }
-            DropdownMenu(
-                expanded = expandedProvider,
-                onDismissRequest = { expandedProvider = false },
-                modifier = Modifier.fillMaxWidth(0.5f)
-            ) {
-                DropdownMenuItem(
-                    text = { Text("All", style = MaterialTheme.typography.bodyMedium) },
-                    onClick = {
-                        onProviderSelected(null)
-                        expandedProvider = false
-                    }
-                )
-                // FIX (improvement): .entries replaces deprecated .values()
-                NetworkProvider.entries.forEach { provider ->
-                    DropdownMenuItem(
-                        text = { Text(provider.shortName, style = MaterialTheme.typography.bodyMedium) },
-                        onClick = {
-                            onProviderSelected(provider.name)
-                            expandedProvider = false
-                        }
-                    )
-                }
-            }
-        }
-
-        if (availableYears.isNotEmpty()) {
-            Box(modifier = Modifier.weight(0.8f)) {
-                OutlinedButton(
-                    onClick = { expandedYear = !expandedYear },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(40.dp),
-                    shape = MaterialTheme.shapes.small
-                ) {
-                    Text(
-                        selectedYear.toString(),
-                        style = MaterialTheme.typography.labelMedium
-                    )
-                }
-                DropdownMenu(
-                    expanded = expandedYear,
-                    onDismissRequest = { expandedYear = false },
-                    modifier = Modifier.fillMaxWidth(0.5f)
-                ) {
-                    availableYears.forEach { year ->
-                        DropdownMenuItem(
-                            text = { Text(year.toString(), style = MaterialTheme.typography.bodyMedium) },
-                            onClick = {
-                                onYearSelected(year)
-                                expandedYear = false
-                            }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
 private fun transactionYear(timestamp: Long): Int =
     Calendar.getInstance().apply { timeInMillis = timestamp }.get(Calendar.YEAR)
-
-@Composable
-fun InsightCard(
-    title: String,
-    value: String,
-    subtitle: String,
-    color: Color,
-    modifier: Modifier = Modifier,
-    isSensitive: Boolean = false
-) {
-    val privacyMode = LocalPrivacyMode.current.value
-
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .animateContentSize(animationSpec = spring(dampingRatio = 0.6f)),
-        colors = CardDefaults.cardColors(containerColor = color),
-        shape = MaterialTheme.shapes.medium,
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                maxLines = 1
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = if (isSensitive && privacyMode) Modifier.blur(12.dp) else Modifier,
-                maxLines = 1
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                maxLines = 1
-            )
-        }
-    }
-}
 
 @Composable
 fun PermissionScreen(
@@ -813,85 +604,6 @@ fun LockScreen(
             shape = MaterialTheme.shapes.medium
         ) {
             Text("Authenticate", style = MaterialTheme.typography.labelLarge)
-        }
-    }
-}
-
-// FIX #4: Added `currency: CurrencyOption` parameter so amounts display in the user's chosen currency
-//         instead of always showing "Ksh" regardless of Settings.
-// FIX #5: Applied privacy blur consistently to ALL text rows, not just the fee line.
-@Composable
-fun TransactionCard(
-    transaction: PesaTransaction,
-    currency: CurrencyOption,
-    onClick: () -> Unit = {}
-) {
-    val privacyMode = LocalPrivacyMode.current.value
-
-    Card(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-            .animateContentSize(animationSpec = spring(dampingRatio = 0.7f)),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = transaction.name,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1
-                )
-                val typeColor = if (transaction.type == "Received")
-                    MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-
-                // FIX #5: Both the fee line AND the plain type line now get the blur modifier
-                if (transaction.fee > 0) {
-                    Text(
-                        // FIX #4: Fee also converted via formatMoney instead of hardcoded Ksh
-                        text = "${transaction.type} • Fee: ${formatMoney(transaction.fee, currency, decimals = 0)}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = typeColor,
-                        modifier = if (privacyMode) Modifier.blur(8.dp) else Modifier,
-                        maxLines = 1
-                    )
-                } else {
-                    Text(
-                        text = transaction.type,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = typeColor,
-                        // FIX #5: Was missing the blur modifier — now consistent with the fee line
-                        modifier = if (privacyMode) Modifier.blur(8.dp) else Modifier,
-                        maxLines = 1
-                    )
-                }
-            }
-
-            // FIX #4: Use formatMoney() with the selected currency instead of hardcoded "Ksh"
-            Text(
-                text = "${if (transaction.type == "Received") "+" else "-"} ${
-                    formatMoney(transaction.amount, currency, decimals = 0)
-                }",
-                style = MaterialTheme.typography.labelLarge,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                color = if (transaction.type == "Received")
-                    MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                modifier = if (privacyMode) Modifier.blur(12.dp) else Modifier,
-                maxLines = 1
-            )
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.example.pesalens.logic
 
 import com.example.pesalens.PesaTransaction
+import java.util.Calendar
 
 data class FulizaHealthTracker(
     val currentUsage: Double = 0.0,
@@ -12,35 +13,46 @@ data class FulizaHealthTracker(
 )
 
 fun calculateFulizaHealth(transactions: List<PesaTransaction>): FulizaHealthTracker {
-    var totalUsage = 0.0
+    val fulizaTransactions = transactions.filter { it.isFuliza }
+    
+    // Sort by date to track balance changes
+    val sorted = fulizaTransactions.sortedBy { it.date }
+    
+    var totalBorrowed = 0.0
     var totalRepaid = 0.0
-    var daysInOverdraft = 0
-
-    transactions.forEach { transaction ->
-        if (transaction.name.contains("Fuliza", ignoreCase = true)) {
-            if (transaction.type == "Sent") {
-                totalUsage += transaction.amount
-            } else if (transaction.type == "Received") {
-                totalRepaid += transaction.amount
-            }
+    val overdraftDays = mutableSetOf<String>()
+    
+    fulizaTransactions.forEach { tx ->
+        when (tx.type) {
+            "Fuliza Borrow" -> totalBorrowed += tx.amount
+            "Fuliza Repay" -> totalRepaid += tx.amount
         }
+        
+        // Track unique days where Fuliza was used
+        val cal = Calendar.getInstance().apply { timeInMillis = tx.date }
+        val dayKey = "${cal.get(Calendar.YEAR)}-${cal.get(Calendar.MONTH)}-${cal.get(Calendar.DAY_OF_MONTH)}"
+        overdraftDays.add(dayKey)
     }
 
+    val currentUsage = (totalBorrowed - totalRepaid).coerceAtLeast(0.0)
+    val latestLimit = transactions.sortedByDescending { it.date }.firstOrNull { it.fulizaLimit != null }?.fulizaLimit ?: 0.0
+
     val warnings = mutableListOf<String>()
-    if (totalUsage > 10000) {
-        daysInOverdraft = transactions.count {
-            it.name.contains("Fuliza", ignoreCase = true)
-        }
-        if (daysInOverdraft > 0) {
-            warnings.add("You are using Fuliza $daysInOverdraft days this month.")
-        }
+    if (currentUsage > (latestLimit * 0.8) && latestLimit > 0) {
+        warnings.add("High usage: You've used over 80% of your Fuliza limit.")
+    }
+    if (overdraftDays.size > 15) {
+        warnings.add("Frequent use: You have used Fuliza on ${overdraftDays.size} different days recently.")
+    }
+    if (currentUsage > 0 && totalRepaid == 0.0 && fulizaTransactions.isNotEmpty()) {
+        warnings.add("Reminder: Aim to repay your Fuliza balance to avoid daily maintenance fees.")
     }
 
     return FulizaHealthTracker(
-        currentUsage = totalUsage,
+        currentUsage = currentUsage,
+        totalLimit = latestLimit,
         repayments = totalRepaid,
-        daysInOverdraft = daysInOverdraft,
+        daysInOverdraft = overdraftDays.size,
         warnings = warnings
     )
 }
-

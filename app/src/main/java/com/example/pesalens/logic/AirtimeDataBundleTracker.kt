@@ -39,8 +39,8 @@ class AirtimeDataBundleTracker {
         val now = System.currentTimeMillis()
         val monthStart = now - (30L * 24 * 60 * 60 * 1000)
 
-        return TelecomProvider.values().associateWith { provider ->
-            getProviderSpend(provider, monthStart, now)
+        return TelecomProvider.entries.associate { provider ->
+            provider to getProviderSpend(provider, monthStart, now)
         }
     }
 

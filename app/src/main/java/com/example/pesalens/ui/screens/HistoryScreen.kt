@@ -1,9 +1,9 @@
 package com.example.pesalens.ui.screens
 
 import androidx.compose.animation.*
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,9 +19,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -41,14 +38,63 @@ fun HistoryScreen(transactions: List<PesaTransaction>, currency: CurrencyOption)
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showSheet by remember { mutableStateOf(false) }
     var isSearchActive by remember { mutableStateOf(false) }
+    var selectedFilter by remember { mutableStateOf("All") } // Filter: All, Income, Expenses
+    var selectedTimeFilter by remember { mutableStateOf("All") } // Time filter: All, Today, Week, Month
     val listState = rememberLazyListState()
 
-    val filteredTransactions = remember(searchQuery, transactions) {
-        transactions.filter {
-            searchQuery.isBlank() ||
-                    it.name.contains(searchQuery, ignoreCase = true) ||
-                    it.rawMessage.contains(searchQuery, ignoreCase = true) ||
-                    it.type.contains(searchQuery, ignoreCase = true)
+    val filteredTransactions = remember(searchQuery, transactions, selectedFilter, selectedTimeFilter) {
+        val now = System.currentTimeMillis()
+        val calendar = Calendar.getInstance().apply { timeInMillis = now }
+
+        transactions.filter { transaction ->
+            // Apply time filter first
+            val passesTimeFilter = when (selectedTimeFilter) {
+                "Today" -> {
+                    val today = Calendar.getInstance().apply {
+                        set(Calendar.HOUR_OF_DAY, 0)
+                        set(Calendar.MINUTE, 0)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }
+                    transaction.date >= today.timeInMillis
+                }
+                "Week" -> {
+                    val weekStart = Calendar.getInstance().apply {
+                        set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+                        set(Calendar.HOUR_OF_DAY, 0)
+                        set(Calendar.MINUTE, 0)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }
+                    transaction.date >= weekStart.timeInMillis
+                }
+                "Month" -> {
+                    val monthStart = Calendar.getInstance().apply {
+                        set(Calendar.DAY_OF_MONTH, 1)
+                        set(Calendar.HOUR_OF_DAY, 0)
+                        set(Calendar.MINUTE, 0)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }
+                    transaction.date >= monthStart.timeInMillis
+                }
+                else -> true // No time filter
+            }
+
+            // Apply type filter
+            val passesTypeFilter = when (selectedFilter) {
+                "Income" -> transaction.type == "Received"
+                "Expenses" -> transaction.type != "Received" && transaction.type != "Balance"
+                else -> true // "All"
+            }
+
+            // Apply search filter
+            val passesSearchFilter = searchQuery.isBlank() ||
+                    transaction.name.contains(searchQuery, ignoreCase = true) ||
+                    transaction.rawMessage.contains(searchQuery, ignoreCase = true) ||
+                    transaction.type.contains(searchQuery, ignoreCase = true)
+
+            passesTimeFilter && passesTypeFilter && passesSearchFilter
         }
     }
 
@@ -58,45 +104,81 @@ fun HistoryScreen(transactions: List<PesaTransaction>, currency: CurrencyOption)
         }
     }
 
-    // Summary stats
-    val totalIn  = remember(filteredTransactions) { filteredTransactions.filter { it.type == "Received" }.sumOf { it.amount } }
-    val totalOut = remember(filteredTransactions) { filteredTransactions.filter { it.type != "Received" }.sumOf { it.amount } }
-
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
 
-        // ── Top summary strip ───────────────────────────────────────────────
+        // ── Quick actions & insights ───────────────────────────────────────
         AnimatedVisibility(visible = transactions.isNotEmpty() && !isSearchActive) {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                MiniStatCard(
-                    label = "Money In",
-                    value = formatMoney(totalIn, currency, decimals = 0),
-                    gradient = Brush.linearGradient(listOf(Color(0xFF0F9960), Color(0xFF34D399))),
-                    icon = Icons.Rounded.ArrowDownward,
-                    modifier = Modifier.weight(1f)
-                )
-                MiniStatCard(
-                    label = "Money Out",
-                    value = formatMoney(totalOut, currency, decimals = 0),
-                    gradient = Brush.linearGradient(listOf(Color(0xFFDC2626), Color(0xFFF87171))),
-                    icon = Icons.Rounded.ArrowUpward,
-                    modifier = Modifier.weight(1f)
-                )
+                // Quick time filters
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf("All", "Today", "Week", "Month").forEach { period ->
+                        FilterChip(
+                            selected = selectedTimeFilter == period,
+                            onClick = { selectedTimeFilter = period },
+                            label = { Text(period, style = MaterialTheme.typography.labelSmall) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                // Action buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { /* TODO: export functionality */ },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Rounded.FileDownload, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Export", style = MaterialTheme.typography.labelMedium)
+                    }
+
+                    OutlinedButton(
+                        onClick = { /* TODO: share functionality */ },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Rounded.Share, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Share", style = MaterialTheme.typography.labelMedium)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            searchQuery = ""
+                            selectedFilter = "All"
+                            selectedTimeFilter = "All"
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Rounded.Clear, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Clear", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
             }
         }
 
-        // ── Search bar ──────────────────────────────────────────────────────
+        // ── Search bar: Minimal padding ─────────────────────────────────────────
         SearchBar(
             query = searchQuery,
             onQueryChange = { searchQuery = it },
             onSearch = { isSearchActive = false },
             active = isSearchActive,
             onActiveChange = { isSearchActive = it },
-            placeholder = { Text("Search by name, type, message…", color = MaterialTheme.colorScheme.outline) },
+            placeholder = { Text("Search…", color = MaterialTheme.colorScheme.outline) },
             leadingIcon = {
                 Icon(Icons.Rounded.Search, contentDescription = null,
                     tint = if (isSearchActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)
@@ -110,12 +192,12 @@ fun HistoryScreen(transactions: List<PesaTransaction>, currency: CurrencyOption)
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 6.dp),
             tonalElevation = 0.dp
         ) {
-            // Search suggestions
+            // Search suggestions (minimal)
             if (searchQuery.isBlank()) {
-                listOf("Received", "Sent", "Paybill", "Buy Goods", "Debt/Loan").forEach { type ->
+                listOf("Received", "Sent", "Paybill").forEach { type ->
                     ListItem(
                         headlineContent = { Text(type) },
                         leadingContent = { Icon(Icons.Rounded.Tag, contentDescription = null) },
@@ -125,12 +207,29 @@ fun HistoryScreen(transactions: List<PesaTransaction>, currency: CurrencyOption)
             }
         }
 
+        // ── Filter tabs ──────────────────────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf("All", "Income", "Expenses").forEach { filter ->
+                FilterChip(
+                    selected = selectedFilter == filter,
+                    onClick = { selectedFilter = filter },
+                    label = { Text(filter, style = MaterialTheme.typography.labelMedium) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
         if (filteredTransactions.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Icon(Icons.Rounded.SearchOff, contentDescription = null,
-                        modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.outline)
-                    Text("No transactions found", style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.outline)
+                    Text("No transactions found", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.outline)
                     if (searchQuery.isNotBlank()) {
                         TextButton(onClick = { searchQuery = "" }) { Text("Clear search") }
@@ -140,11 +239,12 @@ fun HistoryScreen(transactions: List<PesaTransaction>, currency: CurrencyOption)
             return@Column
         }
 
-        // ── Transaction list ─────────────────────────────────────────────────
+        // ── Transaction list: Compact spacing ────────────────────────────────
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp)
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             grouped.forEach { (date, dailyTransactions) ->
                 stickyHeader(key = date) {
@@ -162,7 +262,7 @@ fun HistoryScreen(transactions: List<PesaTransaction>, currency: CurrencyOption)
                         }
                     }
                 }
-                item { Spacer(Modifier.height(8.dp)) }
+                item { Spacer(Modifier.height(4.dp)) }
             }
         }
     }
@@ -175,37 +275,6 @@ fun HistoryScreen(transactions: List<PesaTransaction>, currency: CurrencyOption)
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
         ) {
             TransactionDetailContent(selectedTransaction!!, currency)
-        }
-    }
-}
-
-@Composable
-private fun MiniStatCard(
-    label: String,
-    value: String,
-    gradient: Brush,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    modifier: Modifier = Modifier
-) {
-    val privacyMode = LocalPrivacyMode.current.value
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(gradient)
-            .padding(horizontal = 14.dp, vertical = 10.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(icon, contentDescription = null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(18.dp))
-            Column {
-                Text(label, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.75f))
-                Text(
-                    value,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    modifier = if (privacyMode) Modifier.blur(10.dp) else Modifier
-                )
-            }
         }
     }
 }
